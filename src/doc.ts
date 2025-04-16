@@ -279,6 +279,11 @@ const registerDocEvents = (scene: Scene, events: Events) => {
         }
     });
 
+    events.function('doc.saveToS3', async () => {
+        const filename = events.invoke('doc.name') || 'scene.ssproj';
+        await events.invoke('scene.saveToS3', filename);
+    });
+
     // doc name
 
     let docName: string = null;

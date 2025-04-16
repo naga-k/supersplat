@@ -21,7 +21,9 @@ import { VideoSettingsDialog } from './video-settings-dialog';
 import { ViewCube } from './view-cube';
 import { ViewPanel } from './view-panel';
 import { ViewerExportPopup } from './viewer-export-popup';
+import { CloudStorageDialog } from './cloud-storage-dialog';
 import { version } from '../../package.json';
+import { getUser } from '../cloud-storage';
 
 class EditorUI {
     appContainer: Container;
@@ -169,10 +171,14 @@ class EditorUI {
         // video settings
         const videoSettingsDialog = new VideoSettingsDialog(events);
 
+        // cloud storage dialog
+        const cloudStorageDialog = new CloudStorageDialog(events);
+
         topContainer.append(popup);
         topContainer.append(viewerExportPopup);
         topContainer.append(publishSettingsDialog);
         topContainer.append(videoSettingsDialog);
+        topContainer.append(cloudStorageDialog);
 
         appContainer.append(editorContainer);
         appContainer.append(topContainer);
@@ -223,6 +229,27 @@ class EditorUI {
 
             if (videoSettings) {
                 await events.invoke('render.video', videoSettings);
+            }
+        });
+
+        events.function('show.cloudStorageDialog', async () => {
+            const user = await getUser();
+            if (!user) {
+                // Show error
+                return;
+            }
+            
+            try {
+                events.fire('startSpinner');
+                // Use fixed filename instead of showing dialog
+                const filename = "scene.ssproj"; 
+                await events.invoke('storage.save', filename);
+                
+                // Show success message
+            } catch (error) {
+                // Show error message
+            } finally {
+                events.fire('stopSpinner');
             }
         });
 

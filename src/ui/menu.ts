@@ -20,12 +20,102 @@ import selectLock from './svg/select-lock.svg';
 import selectNone from './svg/select-none.svg';
 import selectSeparate from './svg/select-separate.svg';
 import selectUnlock from './svg/select-unlock.svg';
+import cloudSave from './svg/save.svg';
 
 const createSvg = (svgString: string) => {
     const decodedStr = decodeURIComponent(svgString.substring('data:image/svg+xml,'.length));
     return new Element({
         dom: new DOMParser().parseFromString(decodedStr, 'image/svg+xml').documentElement
     });
+};
+
+const createFileMenu = (events: Events) => {
+    return [
+        {
+            text: localize('file.new'),
+            icon: createSvg(sceneNew),
+            isEnabled: () => !events.invoke('scene.empty'),
+            onSelect: () => events.invoke('doc.new')
+        },
+        {
+            text: localize('file.open'),
+            icon: createSvg(sceneOpen),
+            onSelect: async () => {
+                await events.invoke('doc.open');
+            }
+        },
+        {
+            // separator
+        },
+        {
+            text: localize('file.save'),
+            icon: createSvg(sceneSave),
+            isEnabled: () => events.invoke('doc.name'),
+            onSelect: async () => await events.invoke('doc.save')
+        },
+        {
+            text: localize('file.save-as'),
+            icon: createSvg(sceneSave),
+            isEnabled: () => !events.invoke('scene.empty'),
+            onSelect: async () => await events.invoke('doc.saveAs')
+        },
+        {
+            text: localize('file.save-to-cloud'),
+            icon: createSvg(cloudSave),
+            isEnabled: () => !events.invoke('scene.empty'),
+            onSelect: async () => await events.invoke('show.cloudStorageDialog'),
+            extra: 'Ctrl+Alt+S'
+        },
+        {
+            // separator
+        },
+        {
+            text: localize('file.import'),
+            icon: createSvg(sceneImport),
+            onSelect: async () => {
+                await events.invoke('scene.import');
+            }
+        },
+        {
+            text: localize('file.export'),
+            icon: createSvg(sceneExport),
+            subMenu: new MenuPanel([
+                {
+                    text: localize('file.export.ply'),
+                    icon: createSvg(sceneExport),
+                    isEnabled: () => !events.invoke('scene.empty'),
+                    onSelect: () => events.invoke('scene.export', 'ply')
+                },
+                {
+                    text: localize('file.export.compressed-ply'),
+                    icon: createSvg(sceneExport),
+                    isEnabled: () => !events.invoke('scene.empty'),
+                    onSelect: () => events.invoke('scene.export', 'compressed-ply')
+                },
+                {
+                    text: localize('file.export.splat'),
+                    icon: createSvg(sceneExport),
+                    isEnabled: () => !events.invoke('scene.empty'),
+                    onSelect: () => events.invoke('scene.export', 'splat')
+                },
+                {
+                    // separator
+                },
+                {
+                    text: localize('file.export.viewer'),
+                    icon: createSvg(sceneExport),
+                    isEnabled: () => !events.invoke('scene.empty'),
+                    onSelect: () => events.invoke('scene.export', 'viewer')
+                }
+            ])
+        },
+        {
+            text: localize('file.publish'),
+            icon: createSvg(scenePublish),
+            isEnabled: () => !events.invoke('scene.empty'),
+            onSelect: async () => await events.invoke('show.publishSettingsDialog')
+        }
+    ];
 };
 
 class Menu extends Container {
@@ -108,71 +198,7 @@ class Menu extends Container {
         menubar.append(icon);
         menubar.append(buttonsContainer);
 
-        const exportMenuPanel = new MenuPanel([{
-            text: localize('file.export.ply'),
-            icon: createSvg(sceneExport),
-            isEnabled: () => !events.invoke('scene.empty'),
-            onSelect: () => events.invoke('scene.export', 'ply')
-        }, {
-            text: localize('file.export.compressed-ply'),
-            icon: createSvg(sceneExport),
-            isEnabled: () => !events.invoke('scene.empty'),
-            onSelect: () => events.invoke('scene.export', 'compressed-ply')
-        }, {
-            text: localize('file.export.splat'),
-            icon: createSvg(sceneExport),
-            isEnabled: () => !events.invoke('scene.empty'),
-            onSelect: () => events.invoke('scene.export', 'splat')
-        }, {
-            // separator
-        }, {
-            text: localize('file.export.viewer'),
-            icon: createSvg(sceneExport),
-            isEnabled: () => !events.invoke('scene.empty'),
-            onSelect: () => events.invoke('scene.export', 'viewer')
-        }]);
-
-        const fileMenuPanel = new MenuPanel([{
-            text: localize('file.new'),
-            icon: createSvg(sceneNew),
-            isEnabled: () => !events.invoke('scene.empty'),
-            onSelect: () => events.invoke('doc.new')
-        }, {
-            text: localize('file.open'),
-            icon: createSvg(sceneOpen),
-            onSelect: async () => {
-                await events.invoke('doc.open');
-            }
-        }, {
-            // separator
-        }, {
-            text: localize('file.save'),
-            icon: createSvg(sceneSave),
-            isEnabled: () => events.invoke('doc.name'),
-            onSelect: async () => await events.invoke('doc.save')
-        }, {
-            text: localize('file.save-as'),
-            icon: createSvg(sceneSave),
-            isEnabled: () => !events.invoke('scene.empty'),
-            onSelect: async () => await events.invoke('doc.saveAs')
-        }, {
-            // separator
-        }, {
-            text: localize('file.import'),
-            icon: createSvg(sceneImport),
-            onSelect: async () => {
-                await events.invoke('scene.import');
-            }
-        }, {
-            text: localize('file.export'),
-            icon: createSvg(sceneExport),
-            subMenu: exportMenuPanel
-        }, {
-            text: localize('file.publish'),
-            icon: createSvg(scenePublish),
-            isEnabled: () => !events.invoke('scene.empty'),
-            onSelect: async () => await events.invoke('show.publishSettingsDialog')
-        }]);
+        const fileMenuPanel = new MenuPanel(createFileMenu(events));
 
         const selectionMenuPanel = new MenuPanel([{
             text: localize('select.all'),
@@ -277,7 +303,6 @@ class Menu extends Container {
 
         this.append(menubar);
         this.append(fileMenuPanel);
-        this.append(exportMenuPanel);
         this.append(selectionMenuPanel);
         this.append(renderMenuPanel);
         this.append(helpMenuPanel);

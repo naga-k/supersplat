@@ -3,6 +3,7 @@ import { Color, createGraphicsDevice } from 'playcanvas';
 import { registerCameraPosesEvents } from './camera-poses';
 import { registerDocEvents } from './doc';
 import { EditHistory } from './edit-history';
+// Assuming Editor class is exported from './editor' now - REMOVED Editor import
 import { registerEditorEvents } from './editor';
 import { Events } from './events';
 import { initFileHandler } from './file-handler';
@@ -25,6 +26,8 @@ import { SphereSelection } from './tools/sphere-selection';
 import { ToolManager } from './tools/tool-manager';
 import { registerTransformHandlerEvents } from './transform-handler';
 import { EditorUI } from './ui/editor';
+import { registerStorageEvents } from './cloud-storage';
+import { initializeStorage } from './storage-init'; // Import the initializer
 
 declare global {
     interface LaunchParams {
@@ -251,6 +254,10 @@ const main = async () => {
     registerPublishEvents(events);
     registerDocEvents(scene, events);
     registerRenderEvents(scene, events);
+    registerStorageEvents(events); // Registers the 'storage.save' function
+
+    initializeStorage(events, scene); // Initializes 'storage.provider', 'serializeSplat', etc.
+
     initShortcuts(events);
     initFileHandler(scene, events, editorUI.appContainer.dom, remoteStorageDetails);
 

@@ -26,6 +26,7 @@ const localizeInit = () => {
                     'file.export.compressed-ply': 'Komprimiertes PLY',
                     'file.export.splat': 'Splat',
                     'file.export.viewer': 'Viewer App...',
+                    'file.save-to-cloud': 'In die Cloud speichern',
 
                     // Selection menu
                     'select': 'Auswahl',
@@ -155,6 +156,7 @@ const localizeInit = () => {
                     'tooltip.camera-reset': 'Kamera zurücksetzen',
                     'tooltip.color-panel': 'Farben',
                     'tooltip.view-options': 'Anzeige Optionen',
+                    'tooltip.cloud-save': 'In die Cloud speichern (Strg+Alt+S)',
 
                     // Bottom toolbar
                     'tooltip.undo': 'Rückgängig ( Strg + Z )',
@@ -209,6 +211,15 @@ const localizeInit = () => {
                     'render.video': 'Video...',
                     'render.ok': 'Render',
                     'render.cancel': 'Cancel',
+
+                    // Cloud storage
+                    'cloud.storage-title': 'Save to Cloud Storage',
+                    'cloud.save': 'Save',
+                    'cloud.save-success': 'File Saved',
+                    'cloud.save-complete': 'Project saved to cloud storage',
+                    'cloud.save-failed': 'Save Failed',
+                    'cloud.auth-required': 'Authentication Required',
+                    'cloud.please-login': 'Please login to save your project',
 
                     // Selection menu
                     'select': 'Select',
@@ -355,6 +366,7 @@ const localizeInit = () => {
                     'tooltip.camera-reset': 'Reset Camera',
                     'tooltip.color-panel': 'Colors',
                     'tooltip.view-options': 'View Options',
+                    'tooltip.cloud-save': 'Save to Cloud Storage (Ctrl+Alt+S)',
 
                     // Bottom toolbar
                     'tooltip.undo': 'Undo ( Ctrl + Z )',
@@ -425,7 +437,21 @@ const localizeInit = () => {
                     'timeline.add-key': 'Add Key',
                     'timeline.remove-key': 'Remove Key',
                     'timeline.frame-rate': 'Frame Rate',
-                    'timeline.total-frames': 'Total Frames'
+                    'timeline.total-frames': 'Total Frames',
+
+                    // S3
+                    's3.auth-required': 'Authentication Required',
+                    's3.please-login': 'Please log in to save to cloud storage',
+                    's3.save-success': 'Save Successful',
+                    's3.save-complete': 'Project saved to cloud storage',
+                    's3.save-failed': 'Save Failed',
+                    's3.storage-title': 'Cloud Storage',
+                    's3.save': 'Save to Cloud',
+                    's3.save-error': 'Failed to save to cloud',
+
+                    // Storage
+                    'storage.save-failed': 'Failed to Save',
+                    'storage.saved': 'File Saved'
                 }
             },
             fr: {
@@ -443,6 +469,7 @@ const localizeInit = () => {
                     'file.export.compressed-ply': 'Ply compressé',
                     'file.export.splat': 'Fichier splat',
                     'file.export.viewer': 'Application de visualisation...',
+                    'file.save-to-cloud': 'Enregistrer dans le cloud',
 
                     // Selection menu
                     'select': 'Sélection',
@@ -572,6 +599,7 @@ const localizeInit = () => {
                     'tooltip.camera-reset': 'Réinitialiser la caméra',
                     'tooltip.color-panel': 'Couleurs',
                     'tooltip.view-options': 'Options d\'affichage',
+                    'tooltip.cloud-save': 'Enregistrer dans le cloud (Ctrl+Alt+S)',
 
                     // Bottom toolbar
                     'tooltip.undo': 'Annuler ( Ctrl + Z )',
@@ -619,6 +647,7 @@ const localizeInit = () => {
                     'file.export.compressed-ply': 'Compressed PLY (.ply)',
                     'file.export.splat': 'Splat (.splat)',
                     'file.export.viewer': 'Viewer App...',
+                    'file.save-to-cloud': 'クラウドに保存',
 
                     // Selection menu
                     'select': '選択',
@@ -748,6 +777,7 @@ const localizeInit = () => {
                     'tooltip.camera-reset': 'カメラをリセット',
                     'tooltip.color-panel': '色',
                     'tooltip.view-options': '表示オプション',
+                    'tooltip.cloud-save': 'クラウドに保存 (Ctrl+Alt+S)',
 
                     // Bottom toolbar
                     'tooltip.undo': '元に戻す ( Ctrl + Z )',
@@ -795,6 +825,7 @@ const localizeInit = () => {
                     'file.export.compressed-ply': '압축된 PLY',
                     'file.export.splat': 'Splat 파일',
                     'file.export.viewer': '뷰어 앱...',
+                    'file.save-to-cloud': '클라우드에 저장',
 
                     // Selection menu
                     'select': '선택',
@@ -924,6 +955,7 @@ const localizeInit = () => {
                     'tooltip.camera-reset': '카메라 재설정',
                     'tooltip.color-panel': '색상',
                     'tooltip.view-options': '보기 옵션',
+                    'tooltip.cloud-save': '클라우드 저장 (Ctrl+Alt+S)',
 
                     // Bottom toolbar
                     'tooltip.undo': '실행 취소 ( Ctrl + Z )',
@@ -971,6 +1003,7 @@ const localizeInit = () => {
                     'file.export.compressed-ply': '压缩 PLY',
                     'file.export.splat': 'Splat 文件',
                     'file.export.viewer': '查看器应用...',
+                    'file.save-to-cloud': '保存到云端',
 
                     // Selection menu
                     'select': '选择',
@@ -1100,6 +1133,7 @@ const localizeInit = () => {
                     'tooltip.camera-reset': '重置相机',
                     'tooltip.color-panel': '颜色',
                     'tooltip.view-options': '视图选项',
+                    'tooltip.cloud-save': '保存到云存储 (Ctrl+Alt+S)',
 
                     // Bottom toolbar
                     'tooltip.undo': '撤销 ( Ctrl + Z )',
