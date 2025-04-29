@@ -23,35 +23,15 @@ export interface StorageProvider {
     uploadFile(filename: string, data: Uint8Array, token: string): Promise<void>;
 }
 
+interface UploadUrlsResponse {
+    assetId: string;
+    key: string;
+    uploadId: string;
+    presignedUrls: string[];
+}
+
 export const registerStorageEvents = (events: Events) => {
-
     events.function('storage.save', async (filename: string) => {
-        console.log('[DEBUG] storage.save started with filename:', filename);
-        
-        const user = await getUser();
-        console.log('[DEBUG] User retrieved:', user ? 'Yes' : 'No');
-        
-        if (!user) {
-            await events.invoke('showPopup', {
-                type: 'error',
-                header: localize('cloud.auth-required'),
-                message: localize('cloud.please-login')
-            });
-            return false;
-        }
-
-        const provider = events.invoke('storage.provider') as StorageProvider;
-        console.log('[DEBUG] Provider retrieved:', provider ? 'Yes' : 'No');
-        
-        if (!provider) {
-            await events.invoke('showPopup', {
-                type: 'error',
-                header: localize('cloud.no-provider'),
-                message: localize('cloud.provider-required')
-            });
-            return false;
-        }
-
         try {
             events.fire('startSpinner');
             console.log('[DEBUG] Creating zip file...');
@@ -69,31 +49,73 @@ export const registerStorageEvents = (events: Events) => {
                 timeline: events.invoke('docSerialize.timeline'),
                 splats: events.invoke('scene.allSplats').map((s: { docSerialize: () => any; }) => s.docSerialize())
             };
-            console.log('[DEBUG] Document created with splats:', document.splats.length);
 
             await zipWriter.file('document.json', JSON.stringify(document));
 
             // Write splat data
             const splats = events.invoke('scene.allSplats');
-            console.log('[DEBUG] Processing', splats.length, 'splats for serialization');
-            
             for (let i = 0; i < splats.length; ++i) {
-                console.log(`[DEBUG] Serializing splat ${i}...`);
                 await zipWriter.start(`splat_${i}.ply`);
                 await events.invoke('serializeSplat', splats[i], zipWriter);
             }
 
             await zipWriter.close();
             const buffer = writer.close();
-            console.log('[DEBUG] Zip created with size:', buffer.byteLength, 'bytes');
+            const numParts = Math.ceil(buffer.byteLength / (5 * 1024 * 1024)); // 5MB chunks
 
-            // Upload using provider
-            console.log('[DEBUG] Starting upload with provider...');
-            await provider.uploadFile(filename, buffer, user.token);
-            console.log('[DEBUG] Upload completed successfully');
+            // Request upload URLs from Flutter
+            console.log('[DEBUG] Requesting upload URLs...');
+            window.postMessage({
+                type: 'requestUploadUrls',
+                data: {
+                    fileName: filename,
+                    numberOfParts: numParts
+                }
+            }, '*');
 
-            events.fire('doc.saved'); // Add this line to mark the document as saved
-            return true; // Add explicit return value
+            // Wait for response with upload URLs
+            const uploadUrls: UploadUrlsResponse = await new Promise((resolve, reject) => {
+                const handler = (event: MessageEvent) => {
+                    if (event.data?.type === 'uploadUrls') {
+                        window.removeEventListener('message', handler);
+                        resolve(event.data.data);
+                    }
+                };
+                window.addEventListener('message', handler);
+
+                // Timeout after 30 seconds
+                setTimeout(() => {
+                    window.removeEventListener('message', handler);
+                    reject(new Error('Timeout waiting for upload URLs'));
+                }, 30000);
+            });
+
+            // Upload file chunks using presigned URLs
+            const chunks = splitBuffer(buffer, numParts);
+            const uploadPromises = chunks.map(async (chunk, index) => {
+                const response = await fetch(uploadUrls.presignedUrls[index], {
+                    method: 'PUT',
+                    body: chunk,
+                    headers: {
+                        'Content-Type': 'application/octet-stream'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to upload part ${index + 1}`);
+                }
+
+                return {
+                    PartNumber: index + 1,
+                    ETag: response.headers.get('ETag')?.replace(/"/g, '') ?? ''
+                };
+            });
+
+            const parts = await Promise.all(uploadPromises);
+
+            events.fire('doc.saved');
+            return true;
+
         } catch (error) {
             console.error('[DEBUG] Error during save:', error);
             await events.invoke('showPopup', {
@@ -101,7 +123,7 @@ export const registerStorageEvents = (events: Events) => {
                 header: localize('cloud.save-failed'),
                 message: error.message
             });
-            return false; // Add explicit return value
+            return false;
         } finally {
             events.fire('stopSpinner');
         }
@@ -112,3 +134,17 @@ export const registerStorageEvents = (events: Events) => {
         return !!(await getUser());
     });
 };
+
+// Helper function to split buffer into chunks
+function splitBuffer(buffer: Uint8Array, numParts: number): Uint8Array[] {
+    const chunkSize = Math.ceil(buffer.length / numParts);
+    const chunks: Uint8Array[] = [];
+
+    for (let i = 0; i < numParts; i++) {
+        const start = i * chunkSize;
+        const end = Math.min(start + chunkSize, buffer.length);
+        chunks.push(buffer.slice(start, end));
+    }
+
+    return chunks;
+}
