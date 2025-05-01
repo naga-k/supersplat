@@ -4,147 +4,216 @@ import { ZipWriter } from './serialize/zip-writer';
 import { localize } from './ui/localization';
 
 type User = {
-    id: string;
-    token: string;
-    apiServer: string;
+  id: string;
+  token: string;
+  apiServer: string;
 };
 
-// Hardcoded user for testing
-export const getUser = async (): Promise<User | null> => {
-    // Replace with your actual token and ensure apiServer points to your Go backend
-    return {
-        id: 'hardcoded-user-id',
-        token: '<Insert Token Here>',
-        apiServer: 'http://localhost:3001/api/v1' // Your Go backend base URL
-    };
-};
 
 export interface StorageProvider {
-    uploadFile(filename: string, data: Uint8Array, token: string): Promise<void>;
+  uploadFile(filename: string, data: Uint8Array, token: string): Promise<void>;
 }
 
 interface UploadUrlsResponse {
-    assetId: string;
-    key: string;
-    uploadId: string;
-    presignedUrls: string[];
+  assetId: string;
+  key: string;
+  uploadId: string;
+  presignedUrls: string[];
 }
 
+// Minimum chunk size of 5MB (AWS requirement)
+const MIN_CHUNK_SIZE = 5 * 1024 * 1024; 
+
 export const registerStorageEvents = (events: Events) => {
-    events.function('storage.save', async (filename: string) => {
-        try {
-            events.fire('startSpinner');
-            console.log('[DEBUG] Creating zip file...');
+  events.function('storage.save', async (filename: string) => {
+    try {
+      events.fire('startSpinner');
+      console.log('[DEBUG] Creating zip file...');
 
-            // Create buffer for project
-            const writer = new BufferWriter();
-            const zipWriter = new ZipWriter(writer);
+      // Build the ZIP buffer
+      const writer = new BufferWriter();
+      const zipWriter = new ZipWriter(writer);
+      const document = {
+        version: 0,
+        camera: events.invoke('camera.serialize'),
+        view: events.invoke('docSerialize.view'),
+        poseSets: events.invoke('docSerialize.poseSets'),
+        timeline: events.invoke('docSerialize.timeline'),
+        splats: events.invoke('scene.allSplats').map((s: any) => s.docSerialize())
+      };
+      await zipWriter.file('document.json', JSON.stringify(document));
+      const splats = events.invoke('scene.allSplats');
+      for (let i = 0; i < splats.length; ++i) {
+        await zipWriter.start(`splat_${i}.ply`);
+        await events.invoke('serializeSplat', splats[i], zipWriter);
+      }
+      await zipWriter.close();
+      const buffer = writer.close();
 
-            // Write document data
-            const document = {
-                version: 0,
-                camera: events.invoke('camera.serialize'),
-                view: events.invoke('docSerialize.view'),
-                poseSets: events.invoke('docSerialize.poseSets'),
-                timeline: events.invoke('docSerialize.timeline'),
-                splats: events.invoke('scene.allSplats').map((s: { docSerialize: () => any; }) => s.docSerialize())
-            };
+      const numParts = Math.min(
+        Math.ceil(buffer.byteLength / MIN_CHUNK_SIZE),
+        Math.ceil(buffer.byteLength / (5 * 1024 * 1024))
+      );
 
-            await zipWriter.file('document.json', JSON.stringify(document));
+      console.log('[DEBUG] Requesting upload URLs...');
 
-            // Write splat data
-            const splats = events.invoke('scene.allSplats');
-            for (let i = 0; i < splats.length; ++i) {
-                await zipWriter.start(`splat_${i}.ply`);
-                await events.invoke('serializeSplat', splats[i], zipWriter);
+      // Single helper that always stringifies
+      const sendMessageToHost = (message: any) => {
+        console.log('[DEBUG] Sending to parent window:', message);
+        window.parent.postMessage(JSON.stringify(message), '*');
+      };
+
+      // Await the presigned URLs from Flutter
+      const uploadUrls: UploadUrlsResponse = await new Promise((resolve, reject) => {
+        const handler = (event: MessageEvent) => {
+          console.log('[DEBUG] Received message event:', {
+            origin: event.origin,
+            data: event.data,
+            type: typeof event.data,
+            source: event.source === window ? 'self' : 'external',
+          });
+
+          // Ignore echoes of our own request
+          if (event.source === window) {
+            console.log('[DEBUG] Ignoring self-message');
+            return;
+          }
+
+          let data = event.data;
+          try {
+            if (typeof data === 'string') {
+              data = JSON.parse(data);
+              console.log('[DEBUG] Parsed message data:', data);
             }
 
-            await zipWriter.close();
-            const buffer = writer.close();
-            const numParts = Math.ceil(buffer.byteLength / (5 * 1024 * 1024)); // 5MB chunks
+            if (data?.type === 'uploadUrls') {
+              console.log('[DEBUG] Got upload URLs response:', data.data);
+              window.removeEventListener('message', handler);
+              if (data.error) reject(new Error(data.error));
+              else resolve(data.data);
+              return;
+            }
 
-            // Request upload URLs from Flutter
-            console.log('[DEBUG] Requesting upload URLs...');
-            window.postMessage({
-                type: 'requestUploadUrls',
-                data: {
-                    fileName: filename,
-                    numberOfParts: numParts
-                }
-            }, '*');
+            console.log('[DEBUG] Unexpected message type:', data?.type);
+          } catch (e) {
+            console.error('[DEBUG] Error processing message:', e);
+          }
+        };
 
-            // Wait for response with upload URLs
-            const uploadUrls: UploadUrlsResponse = await new Promise((resolve, reject) => {
-                const handler = (event: MessageEvent) => {
-                    if (event.data?.type === 'uploadUrls') {
-                        window.removeEventListener('message', handler);
-                        resolve(event.data.data);
-                    }
-                };
-                window.addEventListener('message', handler);
+        window.addEventListener('message', handler);
+        console.log('[DEBUG] Registered message handler');
 
-                // Timeout after 30 seconds
-                setTimeout(() => {
-                    window.removeEventListener('message', handler);
-                    reject(new Error('Timeout waiting for upload URLs'));
-                }, 30000);
-            });
+        sendMessageToHost({
+          type: 'requestUploadUrls',
+          data: { fileName: filename, numberOfParts: numParts }
+        });
 
-            // Upload file chunks using presigned URLs
-            const chunks = splitBuffer(buffer, numParts);
-            const uploadPromises = chunks.map(async (chunk, index) => {
-                const response = await fetch(uploadUrls.presignedUrls[index], {
-                    method: 'PUT',
-                    body: chunk,
-                    headers: {
-                        'Content-Type': 'application/octet-stream'
-                    }
-                });
+        setTimeout(() => {
+          window.removeEventListener('message', handler);
+          reject(new Error('Timeout waiting for upload URLs'));
+        }, 30000);
+      });
 
-                if (!response.ok) {
-                    throw new Error(`Failed to upload part ${index + 1}`);
-                }
+      const chunks = splitBuffer(buffer, numParts);
+      const parts = await Promise.all(
+        chunks.map(async (chunk, idx) => {
+          const res = await fetch(uploadUrls.presignedUrls[idx], {
+            method: 'PUT',
+            body: chunk,
+            headers: { 'Content-Type': 'application/octet-stream' }
+          });
+          if (!res.ok) throw new Error(`Failed to upload part ${idx + 1}`);
+          return {
+            PartNumber: idx + 1,
+            ETag: (res.headers.get('ETag') || '').replace(/"/g, '')
+          };
+        })
+      );
 
-                return {
-                    PartNumber: index + 1,
-                    ETag: response.headers.get('ETag')?.replace(/"/g, '') ?? ''
-                };
-            });
+      window.parent.postMessage(
+        JSON.stringify({
+          type: 'multipartUploadComplete',
+          data: {
+            assetId: uploadUrls.assetId,
+            key: uploadUrls.key,
+            uploadId: uploadUrls.uploadId,
+            parts: parts
+          }
+        }),
+        '*'
+      );
 
-            const parts = await Promise.all(uploadPromises);
+      await new Promise<void>((resolve, reject) => {
+        const h = (event: MessageEvent) => {
+          // Ignore echoes of our own request
+          if (event.source === window) {
+            console.log('[DEBUG] Ignoring self-message');
+            return;
+          }
 
-            events.fire('doc.saved');
-            return true;
+          let data = event.data;
+          try {
+            // Parse the message if it's a string
+            if (typeof data === 'string') {
+              data = JSON.parse(data);
+            }
+            console.log('[DEBUG] Processing confirmation message:', data);
 
-        } catch (error) {
-            console.error('[DEBUG] Error during save:', error);
-            await events.invoke('showPopup', {
-                type: 'error',
-                header: localize('cloud.save-failed'),
-                message: error.message
-            });
-            return false;
-        } finally {
-            events.fire('stopSpinner');
-        }
-    });
+            // Check both type and success status
+            if (data?.type === 'multipartUploadConfirmed' && data?.data?.success === true) {
+              console.log('[DEBUG] Upload confirmed successfully:', data);
+              window.removeEventListener('message', h);
+              resolve();
+            } else {
+              console.log('[DEBUG] Received message but not matching criteria:', 
+                JSON.stringify(data, null, 2));
+            }
+          } catch (e) {
+            console.error('[DEBUG] Error processing confirmation message:', e);
+          }
+        };
+        
+        window.addEventListener('message', h);
+        setTimeout(() => {
+          window.removeEventListener('message', h);
+          reject(new Error('Timeout waiting for upload completion'));
+        }, 30000);
+      });
 
-    // Add this function to check if cloud save is enabled
-    events.function('cloudsave.enabled', async () => {
-        return !!(await getUser());
-    });
+      events.fire('doc.saved');
+      return true;
+
+    } catch (error: any) {
+      console.error('[DEBUG] Error during save:', error);
+      await events.invoke('showPopup', {
+        type: 'error',
+        header: localize('cloud.save-failed'),
+        message: error.message
+      });
+      return false;
+    } finally {
+      events.fire('stopSpinner');
+    }
+  });
 };
 
-// Helper function to split buffer into chunks
 function splitBuffer(buffer: Uint8Array, numParts: number): Uint8Array[] {
-    const chunkSize = Math.ceil(buffer.length / numParts);
-    const chunks: Uint8Array[] = [];
-
-    for (let i = 0; i < numParts; i++) {
-        const start = i * chunkSize;
-        const end = Math.min(start + chunkSize, buffer.length);
-        chunks.push(buffer.slice(start, end));
-    }
-
-    return chunks;
+  const minChunks = Math.ceil(buffer.length / MIN_CHUNK_SIZE);
+  const actualNumParts = Math.min(numParts, minChunks);
+  
+  const chunkSize = Math.max(
+    MIN_CHUNK_SIZE,
+    Math.ceil(buffer.length / actualNumParts)
+  );
+  
+  const chunks: Uint8Array[] = [];
+  let start = 0;
+  
+  while (start < buffer.length) {
+    const end = Math.min(start + chunkSize, buffer.length);
+    chunks.push(buffer.slice(start, end));
+    start = end;
+  }
+  
+  return chunks;
 }
