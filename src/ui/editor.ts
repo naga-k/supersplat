@@ -23,7 +23,6 @@ import { ViewPanel } from './view-panel';
 import { ViewerExportPopup } from './viewer-export-popup';
 import { CloudStorageDialog } from './cloud-storage-dialog';
 import { version } from '../../package.json';
-import { getUser } from '../cloud-storage';
 
 class EditorUI {
     appContainer: Container;
@@ -233,21 +232,24 @@ class EditorUI {
         });
 
         events.function('show.cloudStorageDialog', async () => {
-            const user = await getUser();
-            if (!user) {
-                // Show error
-                return;
-            }
-            
             try {
                 events.fire('startSpinner');
-                // Use fixed filename instead of showing dialog
                 const filename = "scene.ssproj"; 
-                await events.invoke('storage.save', filename);
+                const success = await events.invoke('storage.save', filename);
                 
-                // Show success message
+                if (success) {
+                    await events.invoke('showPopup', {
+                        type: 'success',
+                        header: localize('cloud.save-success'),
+                        message: localize('cloud.save-complete')
+                    });
+                }
             } catch (error) {
-                // Show error message
+                await events.invoke('showPopup', {
+                    type: 'error',
+                    header: localize('cloud.save-failed'),
+                    message: error.message
+                });
             } finally {
                 events.fire('stopSpinner');
             }
