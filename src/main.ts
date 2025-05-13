@@ -275,6 +275,12 @@ const main = async () => {
         await events.invoke('import', decodeURIComponent(value));
     }
 
+    // Now that all imports are complete, signal ready - So the flutter web app knows it is complete
+    console.log('[EDITOR] All initialization and imports complete, signaling ready');
+    window.parent.postMessage({
+        type: 'editorReady'
+    }, '*');
+
     // handle OS-based file association in PWA mode
     if ('launchQueue' in window) {
         window.launchQueue.setConsumer(async (launchParams: LaunchParams) => {
